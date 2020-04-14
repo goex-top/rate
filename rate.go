@@ -12,17 +12,21 @@ import (
 // granted are steadily increased until a steady throughput equilibrium is
 // reached.
 type RateLimiter struct {
-	limit    int
-	interval time.Duration
-	mtx      sync.Mutex
-	times    list.List
+	limit     int
+	remaining int
+	resetAt   time.Time
+	interval  time.Duration
+	wait      time.Duration
+	mtx       sync.RWMutex
+	times     list.List
 }
 
 // New creates a new rate limiter for the limit and interval.
 func New(limit int, interval time.Duration) *RateLimiter {
 	lim := &RateLimiter{
-		limit:    limit,
-		interval: interval,
+		limit:     limit,
+		remaining: limit,
+		interval:  interval,
 	}
 	lim.times.Init()
 	return lim
@@ -33,29 +37,60 @@ func New(limit int, interval time.Duration) *RateLimiter {
 // exhausted.
 func (r *RateLimiter) Wait() {
 	for {
-		ok, remaining := r.Try()
+		ok, wait, _ := r.Try()
 		if ok {
 			break
 		}
-		time.Sleep(remaining)
+		time.Sleep(wait)
 	}
 }
 
 // Try returns true if under the rate limit, or false if over and the
 // remaining time before the rate limit expires.
-func (r *RateLimiter) Try() (ok bool, remaining time.Duration) {
-	r.mtx.Lock()
+func (r *RateLimiter) Try() (ok bool, wait time.Duration, remain int) {
 	defer r.mtx.Unlock()
+	r.mtx.Lock()
+	r.wait = 0
 	now := time.Now()
 	if l := r.times.Len(); l < r.limit {
+		r.remaining = r.limit - l - 1
 		r.times.PushBack(now)
-		return true, 0
+		return true, 0, r.remaining
 	}
+	for e := r.times.Front(); e != nil; e = e.Next() {
+		if diff := now.Sub(e.Value.(time.Time)); diff > r.interval {
+			r.times.Remove(e)
+		}
+	}
+	l := r.times.Len()
+	r.remaining = r.limit - l
+
 	frnt := r.times.Front()
 	if diff := now.Sub(frnt.Value.(time.Time)); diff < r.interval {
-		return false, r.interval - diff
+		r.wait = r.interval - diff
+		r.resetAt = now.Add(r.wait)
+		return false, r.wait, r.remaining
 	}
+
 	frnt.Value = now
 	r.times.MoveToBack(frnt)
-	return true, 0
+	return true, 0, r.remaining
+}
+
+func (r *RateLimiter) Remaining() int {
+	defer r.mtx.RUnlock()
+	r.mtx.RLock()
+	return r.remaining
+}
+
+func (r *RateLimiter) Limit() int {
+	defer r.mtx.RUnlock()
+	r.mtx.RLock()
+	return r.limit
+}
+
+func (r *RateLimiter) ResetAt() time.Time {
+	defer r.mtx.RUnlock()
+	r.mtx.RLock()
+	return r.resetAt
 }

@@ -1,6 +1,7 @@
 package rate
 
 import (
+	"log"
 	"testing"
 	"time"
 )
@@ -36,11 +37,26 @@ func TestRateLimiter_Try(t *testing.T) {
 	interval := time.Second * 3
 	limiter := New(limit, interval)
 	for i := 0; i < limit; i++ {
-		if ok, _ := limiter.Try(); !ok {
+		if ok, _, _ := limiter.Try(); !ok {
 			t.Fatalf("Should have allowed try on attempt %d", i)
 		}
 	}
-	if ok, _ := limiter.Try(); ok {
+	if ok, _, _ := limiter.Try(); ok {
 		t.Fatal("Should have not allowed try on final attempt")
+	}
+}
+
+func TestRateLimiter_Remaining(t *testing.T) {
+	limit := 5
+	interval := time.Second * 3
+	limiter := New(limit, interval)
+	for i := 0; i < 3*limit; {
+		if ok, _, _ := limiter.Try(); ok {
+			i++
+		} else {
+			log.Println("wait...")
+		}
+		log.Println(limiter.Remaining())
+		time.Sleep(time.Millisecond * 100)
 	}
 }
