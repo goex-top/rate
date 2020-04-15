@@ -66,7 +66,7 @@ func (r *RateLimiter) Try() (ok bool, wait time.Duration, remain int) {
 	r.remaining = r.limit - l
 
 	frnt := r.times.Front()
-	if diff := now.Sub(frnt.Value.(time.Time)); diff < r.interval {
+	if diff := now.Sub(frnt.Value.(time.Time)); diff <= r.interval {
 		r.wait = r.interval - diff
 		r.resetAt = now.Add(r.wait)
 		return false, r.wait, r.remaining
