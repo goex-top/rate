@@ -60,3 +60,16 @@ func TestRateLimiter_Remaining(t *testing.T) {
 		time.Sleep(time.Millisecond * 100)
 	}
 }
+
+func TestRateLimiter_SetRemaining(t *testing.T) {
+	limit := 5
+	interval := time.Second * 3
+	limiter := New(limit, interval)
+	for i := 0; i < 2*limit; i++ {
+		if ok, _, remain := limiter.Try(); !ok {
+			log.Println("remain plus 2")
+			limiter.SetRemaining(remain + 2)
+		}
+		log.Println(i)
+	}
+}

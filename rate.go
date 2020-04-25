@@ -62,8 +62,7 @@ func (r *RateLimiter) Try() (ok bool, wait time.Duration, remain int) {
 			r.times.Remove(e)
 		}
 	}
-	l := r.times.Len()
-	r.remaining = r.limit - l
+	r.remaining = r.limit - r.times.Len()
 
 	frnt := r.times.Front()
 	if diff := now.Sub(frnt.Value.(time.Time)); diff <= r.interval {
@@ -75,6 +74,33 @@ func (r *RateLimiter) Try() (ok bool, wait time.Duration, remain int) {
 	frnt.Value = now
 	r.times.MoveToBack(frnt)
 	return true, 0, r.remaining
+}
+
+func (r *RateLimiter) SetRemaining(remaining int) {
+	defer r.mtx.Unlock()
+	r.mtx.Lock()
+	now := time.Now()
+	for e := r.times.Front(); e != nil; e = e.Next() {
+		if diff1 := now.Sub(e.Value.(time.Time)); diff1 > r.interval {
+			r.times.Remove(e)
+		}
+	}
+	r.remaining = r.limit - r.times.Len()
+	diff := r.remaining - remaining
+	if diff > 0 {
+		for i := 0; i < diff; i++ {
+			r.times.PushBack(now)
+		}
+	} else if diff < 0 {
+		e := r.times.Front()
+		for i := 0; i < -diff; i++ {
+			if e != nil {
+				r.times.Remove(e)
+				e = e.Next()
+			}
+		}
+	}
+	r.remaining = remaining
 }
 
 func (r *RateLimiter) Remaining() int {
