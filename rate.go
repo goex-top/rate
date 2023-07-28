@@ -45,6 +45,15 @@ func (r *RateLimiter) Wait() {
 	}
 }
 
+func (r *RateLimiter) Reverse() {
+	defer r.mtx.Unlock()
+	r.mtx.Lock()
+	back := r.times.Back()
+	if back != nil {
+		r.times.Remove(back)
+	}
+}
+
 // Try returns true if under the rate limit, or false if over and the
 // remaining time before the rate limit expires.
 func (r *RateLimiter) Try() (ok bool, wait time.Duration, remain int) {
@@ -106,6 +115,20 @@ func (r *RateLimiter) SetRemaining(remaining int) {
 func (r *RateLimiter) Remaining() int {
 	defer r.mtx.RUnlock()
 	r.mtx.RLock()
+	return r.remaining
+}
+
+func (r *RateLimiter) UpdateRemaining() int {
+	defer r.mtx.Unlock()
+	r.mtx.Lock()
+	now := time.Now()
+	for e := r.times.Front(); e != nil; e = e.Next() {
+		if diff := now.Sub(e.Value.(time.Time)); diff > r.interval {
+			r.times.Remove(e)
+		}
+	}
+	r.remaining = r.limit - r.times.Len()
+
 	return r.remaining
 }
 
