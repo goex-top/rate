@@ -45,6 +45,14 @@ func (r *RateLimiter) Wait() {
 	}
 }
 
+func (r *RateLimiter) cleanTimes(now *time.Time) {
+	for e := r.times.Front(); e != nil; e = e.Next() {
+		if diff := now.Sub(e.Value.(time.Time)); diff > r.interval {
+			r.times.Remove(e)
+		}
+	}
+}
+
 // Try returns true if under the rate limit, or false if over and the
 // remaining time before the rate limit expires.
 func (r *RateLimiter) Try() (ok bool, wait time.Duration, remain int) {
@@ -52,16 +60,14 @@ func (r *RateLimiter) Try() (ok bool, wait time.Duration, remain int) {
 	r.mtx.Lock()
 	r.wait = 0
 	now := time.Now()
+	r.cleanTimes(&now)
+
 	if l := r.times.Len(); l < r.limit {
 		r.remaining = r.limit - l - 1
 		r.times.PushBack(now)
 		return true, 0, r.remaining
 	}
-	for e := r.times.Front(); e != nil; e = e.Next() {
-		if diff := now.Sub(e.Value.(time.Time)); diff > r.interval {
-			r.times.Remove(e)
-		}
-	}
+
 	r.remaining = r.limit - r.times.Len()
 
 	frnt := r.times.Front()
@@ -80,11 +86,7 @@ func (r *RateLimiter) SetRemaining(remaining int) {
 	defer r.mtx.Unlock()
 	r.mtx.Lock()
 	now := time.Now()
-	for e := r.times.Front(); e != nil; e = e.Next() {
-		if diff1 := now.Sub(e.Value.(time.Time)); diff1 > r.interval {
-			r.times.Remove(e)
-		}
-	}
+	r.cleanTimes(&now)
 	r.remaining = r.limit - r.times.Len()
 	diff := r.remaining - remaining
 	if diff > 0 {
