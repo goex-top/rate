@@ -47,7 +47,7 @@ func (r *RateLimiter) Wait() {
 
 func (r *RateLimiter) cleanTimes(now *time.Time) {
 	for e := r.times.Front(); e != nil; e = e.Next() {
-		if diff := now.Sub(e.Value.(time.Time)); diff > r.interval {
+		if diff := now.Sub(e.Value.(time.Time)); diff >= r.interval {
 			r.times.Remove(e)
 		}
 	}
