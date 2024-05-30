@@ -50,6 +50,15 @@ func (r *RateLimiter) cleanTimes(now *time.Time) {
 		if diff := now.Sub(e.Value.(time.Time)); diff >= r.interval {
 			r.times.Remove(e)
 		}
+  }
+}
+
+func (r *RateLimiter) Reverse() {
+	defer r.mtx.Unlock()
+	r.mtx.Lock()
+	back := r.times.Back()
+	if back != nil {
+		r.times.Remove(back)
 	}
 }
 
@@ -108,6 +117,20 @@ func (r *RateLimiter) SetRemaining(remaining int) {
 func (r *RateLimiter) Remaining() int {
 	defer r.mtx.RUnlock()
 	r.mtx.RLock()
+	return r.remaining
+}
+
+func (r *RateLimiter) UpdateRemaining() int {
+	defer r.mtx.Unlock()
+	r.mtx.Lock()
+	now := time.Now()
+	for e := r.times.Front(); e != nil; e = e.Next() {
+		if diff := now.Sub(e.Value.(time.Time)); diff > r.interval {
+			r.times.Remove(e)
+		}
+	}
+	r.remaining = r.limit - r.times.Len()
+
 	return r.remaining
 }
 

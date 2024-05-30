@@ -73,3 +73,10 @@ func TestRateLimiter_SetRemaining(t *testing.T) {
 		log.Println(i)
 	}
 }
+
+func TestRateLimiter_Reverse(t *testing.T) {
+	limit := 5
+	interval := time.Second * 3
+	limiter := New(limit, interval)
+	limiter.Reverse()
+}
